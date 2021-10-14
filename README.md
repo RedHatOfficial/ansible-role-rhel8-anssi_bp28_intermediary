@@ -4,7 +4,7 @@ ANSSI-BP-028 (intermediary)
 Ansible Role for ANSSI-BP-028 (intermediary)  
   
 Profile Description:  
-This profile contains configurations that align to ANSSI-BP-028 at the intermediary hardening level.  
+This profile contains configurations that align to ANSSI-BP-028 v1.2 at the intermediary hardening level.  
 ANSSI is the French National Information Security Agency, and stands for Agence nationale de la sécurité des systèmes d'information.  
 ANSSI-BP-028 is a configuration recommendation for GNU/Linux systems.  
 A copy of the ANSSI-BP-028 can be found at the ANSSI website:  
@@ -13,7 +13,7 @@ https://www.ssi.gouv.fr/administration/guide/recommandations-de-securite-relativ
 The tasks that are used in this role are generated using OpenSCAP.
 See the OpenSCAP project for more details on Ansible playbook generation at [https://github.com/OpenSCAP/openscap](https://github.com/OpenSCAP/openscap)
 
-To submit a fix or enhancement for an Ansible task that is failing or missing,
+To submit a fix or enhancement for an Ansible task that is failing or missing in this role,
 see the ComplianceAsCode project at [https://github.com/ComplianceAsCode/content](https://github.com/ComplianceAsCode/content)
 
 Requirements
