@@ -13,7 +13,7 @@
   tags:
   - CCE-80844-4
   - CJIS-5.10.1.3
-  - DISA-STIG-RHEL-08-010360
+  - DISA-STIG-RHEL-08-010359
   - NIST-800-53-CM-6(a)
   - PCI-DSS-Req-11.5
   - enable_strategy
@@ -884,16 +884,16 @@
   - NIST-800-53-SI-2(c)
   - PCI-DSS-Req-6.2
   - high_disruption
-  - high_severity
   - low_complexity
+  - medium_severity
   - patch_strategy
   - reboot_required
   - security_patches_up_to_date
   - skip_ansible_lint
   when:
   - high_disruption | bool
-  - high_severity | bool
   - low_complexity | bool
+  - medium_severity | bool
   - patch_strategy | bool
   - reboot_required | bool
   - security_patches_up_to_date | bool
@@ -1575,61 +1575,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Check if system relies on authconfig
-  ansible.builtin.stat:
-    path: /usr/sbin/authconfig
-  register: result_authconfig_check
-  when:
-  - accounts_passwords_pam_faillock_deny | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  tags:
-  - CCE-80667-9
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020010
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.6
-  - accounts_passwords_pam_faillock_deny
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure pam_faillock.so is properly enabled using authconfig tool
-  ansible.builtin.command:
-    cmd: authconfig --enablefaillock --update
-  when:
-  - accounts_passwords_pam_faillock_deny | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authconfig_check.stat.exists
-  tags:
-  - CCE-80667-9
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020010
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.6
-  - accounts_passwords_pam_faillock_deny
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Check if system relies on authselect
+- name: Lock Accounts After Failed Password Attempts - Check if system relies on authselect tool
   ansible.builtin.stat:
     path: /usr/bin/authselect
   register: result_authselect_present
@@ -1641,7 +1587,6 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - not result_authconfig_check.stat.exists
   tags:
   - CCE-80667-9
   - CJIS-5.5.3
@@ -1657,48 +1602,40 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check integrity of authselect current profile
-  ansible.builtin.command:
-    cmd: authselect check
-  register: result_authselect_check_cmd
-  changed_when: false
-  ignore_errors: true
-  when:
-  - accounts_passwords_pam_faillock_deny | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  tags:
-  - CCE-80667-9
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020010
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.6
-  - accounts_passwords_pam_faillock_deny
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Informative message based on the authselect integrity check result
-  ansible.builtin.assert:
-    that:
+- name: Lock Accounts After Failed Password Attempts - Remediation where authselect tool is present
+  block:
+  - name: Lock Accounts After Failed Password Attempts - Check integrity of authselect current profile
+    ansible.builtin.command:
+      cmd: authselect check
+    register: result_authselect_check_cmd
+    changed_when: false
+    ignore_errors: true
+  - name: Lock Accounts After Failed Password Attempts - Informative message based on the authselect integrity check result
+    ansible.builtin.assert:
+      that:
+      - result_authselect_check_cmd is success
+      fail_msg:
+      - authselect integrity check failed. Remediation aborted!
+      - This remediation could not be applied because an authselect profile was not selected or the selected profile is not
+        intact.
+      - It is not recommended to manually edit the PAM files when authselect tool is available.
+      - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
+      success_msg:
+      - authselect integrity check passed
+  - name: Lock Accounts After Failed Password Attempts - Get authselect current features
+    ansible.builtin.shell:
+      cmd: authselect current | tail -n+3 | awk '{ print $2 }'
+    register: result_authselect_features
+    changed_when: false
+    when:
     - result_authselect_check_cmd is success
-    fail_msg:
-    - authselect integrity check failed. Remediation aborted!
-    - This remediation could not be applied because the authselect profile is not intact.
-    - It is not recommended to manually edit the PAM files when authselect is available
-    - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
-    success_msg:
-    - authselect integrity check passed
+  - name: Lock Accounts After Failed Password Attempts - Ensure with-faillock feature is enabled using authselect tool
+    ansible.builtin.command:
+      cmd: authselect enable-feature with-faillock
+    register: result_authselect_cmd
+    when:
+    - result_authselect_check_cmd is success
+    - result_authselect_features.stdout is not search("with-faillock")
   when:
   - accounts_passwords_pam_faillock_deny | bool
   - low_complexity | bool
@@ -1707,38 +1644,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  tags:
-  - CCE-80667-9
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020010
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.6
-  - accounts_passwords_pam_faillock_deny
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Get authselect current features
-  ansible.builtin.shell:
-    cmd: authselect current | tail -n+3 | awk '{ print $2 }'
-  register: result_authselect_features
-  changed_when: false
-  when:
-  - accounts_passwords_pam_faillock_deny | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
   - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
   tags:
   - CCE-80667-9
   - CJIS-5.5.3
@@ -1754,10 +1660,49 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure with-faillock feature is enabled via authselect tool
-  ansible.builtin.command:
-    cmd: authselect enable-feature with-faillock
-  register: result_authselect_cmd
+- name: Lock Accounts After Failed Password Attempts - Remediation where authselect tool is not present
+  block:
+  - name: Lock Accounts After Failed Password Attempts - Check if pam_faillock.so is already enabled
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail)
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_is_enabled
+  - name: Lock Accounts After Failed Password Attempts - Enable pam_faillock.so preauth editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so preauth
+      insertbefore: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Lock Accounts After Failed Password Attempts - Enable pam_faillock.so authfail editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so authfail
+      insertafter: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Lock Accounts After Failed Password Attempts - Enable pam_faillock.so account section editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: account     required      pam_faillock.so
+      insertbefore: ^account.*required.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
   when:
   - accounts_passwords_pam_faillock_deny | bool
   - low_complexity | bool
@@ -1766,10 +1711,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
-  - result_authselect_features.stdout is not search("with-faillock")
+  - not result_authselect_present.stat.exists
   tags:
   - CCE-80667-9
   - CJIS-5.5.3
@@ -1785,7 +1727,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check the presence of /etc/security/faillock.conf file
+- name: Lock Accounts After Failed Password Attempts - Check the presence of /etc/security/faillock.conf file
   ansible.builtin.stat:
     path: /etc/security/faillock.conf
   register: result_faillock_conf_check
@@ -1812,7 +1754,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure the pam_faillock.so deny parameter in /etc/security/faillock.conf
+- name: Lock Accounts After Failed Password Attempts - Ensure the pam_faillock.so deny parameter in /etc/security/faillock.conf
   ansible.builtin.lineinfile:
     path: /etc/security/faillock.conf
     regexp: ^\s*deny\s*=
@@ -1842,50 +1784,69 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure the pam_faillock.so preauth deny parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)(deny)=[0-5]+(.*)
-    line: \1required\3\4={{ var_accounts_passwords_pam_faillock_deny }}\5
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_deny | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  tags:
-  - CCE-80667-9
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020010
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.6
-  - accounts_passwords_pam_faillock_deny
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the pam_faillock.so authfail deny parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)(deny)=[0-5]+(.*)
-    line: \1required\3\4={{ var_accounts_passwords_pam_faillock_deny }}\5
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
+- name: Lock Accounts After Failed Password Attempts - Ensure the pam_faillock.so deny parameter in PAM files
+  block:
+  - name: Lock Accounts After Failed Password Attempts - Check if pam_faillock.so deny parameter is already enabled in pam
+      files
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail).*deny
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_deny_parameter_is_present
+  - name: Lock Accounts After Failed Password Attempts - Ensure the inclusion of pam_faillock.so preauth deny parameter in
+      auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)
+      line: \1required\3 deny={{ var_accounts_passwords_pam_faillock_deny }}
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_deny_parameter_is_present.found == 0
+  - name: Lock Accounts After Failed Password Attempts - Ensure the inclusion of pam_faillock.so authfail deny parameter in
+      auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)
+      line: \1required\3 deny={{ var_accounts_passwords_pam_faillock_deny }}
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_deny_parameter_is_present.found == 0
+  - name: Lock Accounts After Failed Password Attempts - Ensure the desired value for pam_faillock.so preauth deny parameter
+      in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)(deny)=[0-9]+(.*)
+      line: \1required\3\4={{ var_accounts_passwords_pam_faillock_deny }}\5
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_deny_parameter_is_present.found > 0
+  - name: Lock Accounts After Failed Password Attempts - Ensure the desired value for pam_faillock.so authfail deny parameter
+      in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)(deny)=[0-9]+(.*)
+      line: \1required\3\4={{ var_accounts_passwords_pam_faillock_deny }}\5
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_deny_parameter_is_present.found > 0
   when:
   - accounts_passwords_pam_faillock_deny | bool
   - low_complexity | bool
@@ -1933,57 +1894,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Check if system relies on authconfig
-  ansible.builtin.stat:
-    path: /usr/sbin/authconfig
-  register: result_authconfig_check
-  when:
-  - accounts_passwords_pam_faillock_deny_root | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  tags:
-  - CCE-80668-7
-  - DISA-STIG-RHEL-08-020022
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - NIST-800-53-IA-5(c)
-  - accounts_passwords_pam_faillock_deny_root
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure pam_faillock.so is properly enabled using authconfig tool
-  ansible.builtin.command:
-    cmd: authconfig --enablefaillock --update
-  when:
-  - accounts_passwords_pam_faillock_deny_root | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authconfig_check.stat.exists
-  tags:
-  - CCE-80668-7
-  - DISA-STIG-RHEL-08-020022
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - NIST-800-53-IA-5(c)
-  - accounts_passwords_pam_faillock_deny_root
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Check if system relies on authselect
+- name: Configure the root Account for Failed Password Attempts - Check if system relies on authselect tool
   ansible.builtin.stat:
     path: /usr/bin/authselect
   register: result_authselect_present
@@ -1995,7 +1906,6 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - not result_authconfig_check.stat.exists
   tags:
   - CCE-80668-7
   - DISA-STIG-RHEL-08-020022
@@ -2009,46 +1919,42 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check integrity of authselect current profile
-  ansible.builtin.command:
-    cmd: authselect check
-  register: result_authselect_check_cmd
-  changed_when: false
-  ignore_errors: true
-  when:
-  - accounts_passwords_pam_faillock_deny_root | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  tags:
-  - CCE-80668-7
-  - DISA-STIG-RHEL-08-020022
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - NIST-800-53-IA-5(c)
-  - accounts_passwords_pam_faillock_deny_root
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Informative message based on the authselect integrity check result
-  ansible.builtin.assert:
-    that:
+- name: Configure the root Account for Failed Password Attempts - Remediation where authselect tool is present
+  block:
+  - name: Configure the root Account for Failed Password Attempts - Check integrity of authselect current profile
+    ansible.builtin.command:
+      cmd: authselect check
+    register: result_authselect_check_cmd
+    changed_when: false
+    ignore_errors: true
+  - name: Configure the root Account for Failed Password Attempts - Informative message based on the authselect integrity
+      check result
+    ansible.builtin.assert:
+      that:
+      - result_authselect_check_cmd is success
+      fail_msg:
+      - authselect integrity check failed. Remediation aborted!
+      - This remediation could not be applied because an authselect profile was not selected or the selected profile is not
+        intact.
+      - It is not recommended to manually edit the PAM files when authselect tool is available.
+      - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
+      success_msg:
+      - authselect integrity check passed
+  - name: Configure the root Account for Failed Password Attempts - Get authselect current features
+    ansible.builtin.shell:
+      cmd: authselect current | tail -n+3 | awk '{ print $2 }'
+    register: result_authselect_features
+    changed_when: false
+    when:
     - result_authselect_check_cmd is success
-    fail_msg:
-    - authselect integrity check failed. Remediation aborted!
-    - This remediation could not be applied because the authselect profile is not intact.
-    - It is not recommended to manually edit the PAM files when authselect is available
-    - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
-    success_msg:
-    - authselect integrity check passed
+  - name: Configure the root Account for Failed Password Attempts - Ensure with-faillock feature is enabled using authselect
+      tool
+    ansible.builtin.command:
+      cmd: authselect enable-feature with-faillock
+    register: result_authselect_cmd
+    when:
+    - result_authselect_check_cmd is success
+    - result_authselect_features.stdout is not search("with-faillock")
   when:
   - accounts_passwords_pam_faillock_deny_root | bool
   - low_complexity | bool
@@ -2057,36 +1963,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  tags:
-  - CCE-80668-7
-  - DISA-STIG-RHEL-08-020022
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - NIST-800-53-IA-5(c)
-  - accounts_passwords_pam_faillock_deny_root
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Get authselect current features
-  ansible.builtin.shell:
-    cmd: authselect current | tail -n+3 | awk '{ print $2 }'
-  register: result_authselect_features
-  changed_when: false
-  when:
-  - accounts_passwords_pam_faillock_deny_root | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
   - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
   tags:
   - CCE-80668-7
   - DISA-STIG-RHEL-08-020022
@@ -2100,10 +1977,49 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure with-faillock feature is enabled via authselect tool
-  ansible.builtin.command:
-    cmd: authselect enable-feature with-faillock
-  register: result_authselect_cmd
+- name: Configure the root Account for Failed Password Attempts - Remediation where authselect tool is not present
+  block:
+  - name: Configure the root Account for Failed Password Attempts - Check if pam_faillock.so is already enabled
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail)
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_is_enabled
+  - name: Configure the root Account for Failed Password Attempts - Enable pam_faillock.so preauth editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so preauth
+      insertbefore: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Configure the root Account for Failed Password Attempts - Enable pam_faillock.so authfail editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so authfail
+      insertafter: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Configure the root Account for Failed Password Attempts - Enable pam_faillock.so account section editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: account     required      pam_faillock.so
+      insertbefore: ^account.*required.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
   when:
   - accounts_passwords_pam_faillock_deny_root | bool
   - low_complexity | bool
@@ -2112,10 +2028,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
-  - result_authselect_features.stdout is not search("with-faillock")
+  - not result_authselect_present.stat.exists
   tags:
   - CCE-80668-7
   - DISA-STIG-RHEL-08-020022
@@ -2129,7 +2042,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check the presence of /etc/security/faillock.conf file
+- name: Configure the root Account for Failed Password Attempts - Check the presence of /etc/security/faillock.conf file
   ansible.builtin.stat:
     path: /etc/security/faillock.conf
   register: result_faillock_conf_check
@@ -2154,7 +2067,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure the pam_faillock.so even_deny_root parameter in /etc/security/faillock.conf
+- name: Configure the root Account for Failed Password Attempts - Ensure the pam_faillock.so even_deny_root parameter in /etc/security/faillock.conf
   ansible.builtin.lineinfile:
     path: /etc/security/faillock.conf
     regexp: ^\s*even_deny_root
@@ -2182,14 +2095,44 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check if pam_faillock.so even_deny_root parameter is already enabled in pam files
-  ansible.builtin.lineinfile:
-    path: /etc/pam.d/system-auth
-    regexp: .*auth.*pam_faillock.so (preauth|authfail).*even_deny_root
-    state: absent
-  check_mode: true
-  changed_when: false
-  register: result_pam_faillock_even_deny_root
+- name: Configure the root Account for Failed Password Attempts - Ensure the pam_faillock.so even_deny_root parameter in PAM
+    files
+  block:
+  - name: Configure the root Account for Failed Password Attempts - Check if pam_faillock.so even_deny_root parameter is already
+      enabled in pam files
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail).*even_deny_root
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_even_deny_root_parameter_is_present
+  - name: Configure the root Account for Failed Password Attempts - Ensure the inclusion of pam_faillock.so preauth even_deny_root
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)
+      line: \1required\3 even_deny_root
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_even_deny_root_parameter_is_present.found == 0
+  - name: Configure the root Account for Failed Password Attempts - Ensure the inclusion of pam_faillock.so authfail even_deny_root
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)
+      line: \1required\3 even_deny_root
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_even_deny_root_parameter_is_present.found == 0
   when:
   - accounts_passwords_pam_faillock_deny_root | bool
   - low_complexity | bool
@@ -2199,72 +2142,6 @@
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
   - not result_faillock_conf_check.stat.exists
-  tags:
-  - CCE-80668-7
-  - DISA-STIG-RHEL-08-020022
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - NIST-800-53-IA-5(c)
-  - accounts_passwords_pam_faillock_deny_root
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the pam_faillock.so preauth even_deny_root parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)
-    line: \1required\3 even_deny_root
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_deny_root | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  - result_pam_faillock_even_deny_root.found == 0
-  tags:
-  - CCE-80668-7
-  - DISA-STIG-RHEL-08-020022
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - NIST-800-53-IA-5(c)
-  - accounts_passwords_pam_faillock_deny_root
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the pam_faillock.so authfail even_deny_root parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)
-    line: \1required\3 even_deny_root
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_deny_root | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  - result_pam_faillock_even_deny_root.found == 0
   tags:
   - CCE-80668-7
   - DISA-STIG-RHEL-08-020022
@@ -2300,55 +2177,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Check if system relies on authconfig
-  ansible.builtin.stat:
-    path: /usr/sbin/authconfig
-  register: result_authconfig_check
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure pam_faillock.so is properly enabled using authconfig tool
-  ansible.builtin.command:
-    cmd: authconfig --enablefaillock --update
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authconfig_check.stat.exists
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Check if system relies on authselect
+- name: Set Interval For Counting Failed Password Attempts - Check if system relies on authselect tool
   ansible.builtin.stat:
     path: /usr/bin/authselect
   register: result_authselect_present
@@ -2360,7 +2189,6 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - not result_authconfig_check.stat.exists
   tags:
   - CCE-80669-5
   - DISA-STIG-RHEL-08-020012
@@ -2373,45 +2201,41 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check integrity of authselect current profile
-  ansible.builtin.command:
-    cmd: authselect check
-  register: result_authselect_check_cmd
-  changed_when: false
-  ignore_errors: true
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Informative message based on the authselect integrity check result
-  ansible.builtin.assert:
-    that:
+- name: Set Interval For Counting Failed Password Attempts - Remediation where authselect tool is present
+  block:
+  - name: Set Interval For Counting Failed Password Attempts - Check integrity of authselect current profile
+    ansible.builtin.command:
+      cmd: authselect check
+    register: result_authselect_check_cmd
+    changed_when: false
+    ignore_errors: true
+  - name: Set Interval For Counting Failed Password Attempts - Informative message based on the authselect integrity check
+      result
+    ansible.builtin.assert:
+      that:
+      - result_authselect_check_cmd is success
+      fail_msg:
+      - authselect integrity check failed. Remediation aborted!
+      - This remediation could not be applied because an authselect profile was not selected or the selected profile is not
+        intact.
+      - It is not recommended to manually edit the PAM files when authselect tool is available.
+      - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
+      success_msg:
+      - authselect integrity check passed
+  - name: Set Interval For Counting Failed Password Attempts - Get authselect current features
+    ansible.builtin.shell:
+      cmd: authselect current | tail -n+3 | awk '{ print $2 }'
+    register: result_authselect_features
+    changed_when: false
+    when:
     - result_authselect_check_cmd is success
-    fail_msg:
-    - authselect integrity check failed. Remediation aborted!
-    - This remediation could not be applied because the authselect profile is not intact.
-    - It is not recommended to manually edit the PAM files when authselect is available
-    - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
-    success_msg:
-    - authselect integrity check passed
+  - name: Set Interval For Counting Failed Password Attempts - Ensure with-faillock feature is enabled using authselect tool
+    ansible.builtin.command:
+      cmd: authselect enable-feature with-faillock
+    register: result_authselect_cmd
+    when:
+    - result_authselect_check_cmd is success
+    - result_authselect_features.stdout is not search("with-faillock")
   when:
   - accounts_passwords_pam_faillock_interval | bool
   - low_complexity | bool
@@ -2420,35 +2244,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Get authselect current features
-  ansible.builtin.shell:
-    cmd: authselect current | tail -n+3 | awk '{ print $2 }'
-  register: result_authselect_features
-  changed_when: false
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
   - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
   tags:
   - CCE-80669-5
   - DISA-STIG-RHEL-08-020012
@@ -2461,10 +2257,49 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure with-faillock feature is enabled via authselect tool
-  ansible.builtin.command:
-    cmd: authselect enable-feature with-faillock
-  register: result_authselect_cmd
+- name: Set Interval For Counting Failed Password Attempts - Remediation where authselect tool is not present
+  block:
+  - name: Set Interval For Counting Failed Password Attempts - Check if pam_faillock.so is already enabled
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail)
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_is_enabled
+  - name: Set Interval For Counting Failed Password Attempts - Enable pam_faillock.so preauth editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so preauth
+      insertbefore: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Set Interval For Counting Failed Password Attempts - Enable pam_faillock.so authfail editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so authfail
+      insertafter: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Set Interval For Counting Failed Password Attempts - Enable pam_faillock.so account section editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: account     required      pam_faillock.so
+      insertbefore: ^account.*required.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
   when:
   - accounts_passwords_pam_faillock_interval | bool
   - low_complexity | bool
@@ -2473,10 +2308,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
-  - result_authselect_features.stdout is not search("with-faillock")
+  - not result_authselect_present.stat.exists
   tags:
   - CCE-80669-5
   - DISA-STIG-RHEL-08-020012
@@ -2489,7 +2321,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check the presence of /etc/security/faillock.conf file
+- name: Set Interval For Counting Failed Password Attempts - Check the presence of /etc/security/faillock.conf file
   ansible.builtin.stat:
     path: /etc/security/faillock.conf
   register: result_faillock_conf_check
@@ -2513,7 +2345,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure the pam_faillock.so fail_interval parameter in /etc/security/faillock.conf
+- name: Set Interval For Counting Failed Password Attempts - Ensure the pam_faillock.so fail_interval parameter in /etc/security/faillock.conf
   ansible.builtin.lineinfile:
     path: /etc/security/faillock.conf
     regexp: ^\s*fail_interval\s*=
@@ -2540,14 +2372,69 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check if pam_faillock.so fail_interval parameter is already enabled in pam files
-  ansible.builtin.lineinfile:
-    path: /etc/pam.d/system-auth
-    regexp: .*auth.*pam_faillock.so (preauth|authfail).*fail_interval
-    state: absent
-  check_mode: true
-  changed_when: false
-  register: result_pam_faillock_fail_interval
+- name: Set Interval For Counting Failed Password Attempts - Ensure the pam_faillock.so fail_interval parameter in PAM files
+  block:
+  - name: Set Interval For Counting Failed Password Attempts - Check if pam_faillock.so fail_interval parameter is already
+      enabled in pam files
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail).*fail_interval
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_fail_interval_parameter_is_present
+  - name: Set Interval For Counting Failed Password Attempts - Ensure the inclusion of pam_faillock.so preauth fail_interval
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)
+      line: \1required\3 fail_interval={{ var_accounts_passwords_pam_faillock_fail_interval }}
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_fail_interval_parameter_is_present.found == 0
+  - name: Set Interval For Counting Failed Password Attempts - Ensure the inclusion of pam_faillock.so authfail fail_interval
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)
+      line: \1required\3 fail_interval={{ var_accounts_passwords_pam_faillock_fail_interval }}
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_fail_interval_parameter_is_present.found == 0
+  - name: Set Interval For Counting Failed Password Attempts - Ensure the desired value for pam_faillock.so preauth fail_interval
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)(fail_interval)=[0-9]+(.*)
+      line: \1required\3\4={{ var_accounts_passwords_pam_faillock_fail_interval }}\5
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_fail_interval_parameter_is_present.found > 0
+  - name: Set Interval For Counting Failed Password Attempts - Ensure the desired value for pam_faillock.so authfail fail_interval
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)(fail_interval)=[0-9]+(.*)
+      line: \1required\3\4={{ var_accounts_passwords_pam_faillock_fail_interval }}\5
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_fail_interval_parameter_is_present.found > 0
   when:
   - accounts_passwords_pam_faillock_interval | bool
   - low_complexity | bool
@@ -2557,134 +2444,6 @@
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
   - not result_faillock_conf_check.stat.exists
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the inclusion of pam_faillock.so preauth fail_interval parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)
-    line: \1required\3 fail_interval={{ var_accounts_passwords_pam_faillock_fail_interval }}
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  - result_pam_faillock_fail_interval.found == 0
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the inclusion of pam_faillock.so authfail fail_interval parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)
-    line: \1required\3 fail_interval={{ var_accounts_passwords_pam_faillock_fail_interval }}
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  - result_pam_faillock_fail_interval.found == 0
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the desired value for pam_faillock.so preauth fail_interval parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)(fail_interval)=[0-5]+(.*)
-    line: \1required\3\4={{ var_accounts_passwords_pam_faillock_fail_interval }}\5
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  - result_pam_faillock_fail_interval.found > 0
-  tags:
-  - CCE-80669-5
-  - DISA-STIG-RHEL-08-020012
-  - NIST-800-53-AC-7(a)
-  - NIST-800-53-CM-6(a)
-  - accounts_passwords_pam_faillock_interval
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the desired value for pam_faillock.so authfail fail_interval parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)(fail_interval)=[0-5]+(.*)
-    line: \1required\3\4={{ var_accounts_passwords_pam_faillock_fail_interval }}\5
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_interval | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  - result_pam_faillock_fail_interval.found > 0
   tags:
   - CCE-80669-5
   - DISA-STIG-RHEL-08-020012
@@ -2722,61 +2481,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
 
-- name: Check if system relies on authconfig
-  ansible.builtin.stat:
-    path: /usr/sbin/authconfig
-  register: result_authconfig_check
-  when:
-  - accounts_passwords_pam_faillock_unlock_time | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  tags:
-  - CCE-80670-3
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020016
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.7
-  - accounts_passwords_pam_faillock_unlock_time
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure pam_faillock.so is properly enabled using authconfig tool
-  ansible.builtin.command:
-    cmd: authconfig --enablefaillock --update
-  when:
-  - accounts_passwords_pam_faillock_unlock_time | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authconfig_check.stat.exists
-  tags:
-  - CCE-80670-3
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020016
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.7
-  - accounts_passwords_pam_faillock_unlock_time
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Check if system relies on authselect
+- name: Set Lockout Time for Failed Password Attempts - Check if system relies on authselect tool
   ansible.builtin.stat:
     path: /usr/bin/authselect
   register: result_authselect_present
@@ -2788,7 +2493,6 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - not result_authconfig_check.stat.exists
   tags:
   - CCE-80670-3
   - CJIS-5.5.3
@@ -2804,48 +2508,40 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check integrity of authselect current profile
-  ansible.builtin.command:
-    cmd: authselect check
-  register: result_authselect_check_cmd
-  changed_when: false
-  ignore_errors: true
-  when:
-  - accounts_passwords_pam_faillock_unlock_time | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  tags:
-  - CCE-80670-3
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020016
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.7
-  - accounts_passwords_pam_faillock_unlock_time
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Informative message based on the authselect integrity check result
-  ansible.builtin.assert:
-    that:
+- name: Set Lockout Time for Failed Password Attempts - Remediation where authselect tool is present
+  block:
+  - name: Set Lockout Time for Failed Password Attempts - Check integrity of authselect current profile
+    ansible.builtin.command:
+      cmd: authselect check
+    register: result_authselect_check_cmd
+    changed_when: false
+    ignore_errors: true
+  - name: Set Lockout Time for Failed Password Attempts - Informative message based on the authselect integrity check result
+    ansible.builtin.assert:
+      that:
+      - result_authselect_check_cmd is success
+      fail_msg:
+      - authselect integrity check failed. Remediation aborted!
+      - This remediation could not be applied because an authselect profile was not selected or the selected profile is not
+        intact.
+      - It is not recommended to manually edit the PAM files when authselect tool is available.
+      - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
+      success_msg:
+      - authselect integrity check passed
+  - name: Set Lockout Time for Failed Password Attempts - Get authselect current features
+    ansible.builtin.shell:
+      cmd: authselect current | tail -n+3 | awk '{ print $2 }'
+    register: result_authselect_features
+    changed_when: false
+    when:
     - result_authselect_check_cmd is success
-    fail_msg:
-    - authselect integrity check failed. Remediation aborted!
-    - This remediation could not be applied because the authselect profile is not intact.
-    - It is not recommended to manually edit the PAM files when authselect is available
-    - In cases where the default authselect profile does not cover a specific demand, a custom authselect profile is recommended.
-    success_msg:
-    - authselect integrity check passed
+  - name: Set Lockout Time for Failed Password Attempts - Ensure with-faillock feature is enabled using authselect tool
+    ansible.builtin.command:
+      cmd: authselect enable-feature with-faillock
+    register: result_authselect_cmd
+    when:
+    - result_authselect_check_cmd is success
+    - result_authselect_features.stdout is not search("with-faillock")
   when:
   - accounts_passwords_pam_faillock_unlock_time | bool
   - low_complexity | bool
@@ -2854,38 +2550,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  tags:
-  - CCE-80670-3
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020016
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.7
-  - accounts_passwords_pam_faillock_unlock_time
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Get authselect current features
-  ansible.builtin.shell:
-    cmd: authselect current | tail -n+3 | awk '{ print $2 }'
-  register: result_authselect_features
-  changed_when: false
-  when:
-  - accounts_passwords_pam_faillock_unlock_time | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
   - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
   tags:
   - CCE-80670-3
   - CJIS-5.5.3
@@ -2901,10 +2566,49 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure with-faillock feature is enabled via authselect tool
-  ansible.builtin.command:
-    cmd: authselect enable-feature with-faillock
-  register: result_authselect_cmd
+- name: Set Lockout Time for Failed Password Attempts - Remediation where authselect tool is not present
+  block:
+  - name: Set Lockout Time for Failed Password Attempts - Check if pam_faillock.so is already enabled
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail)
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_is_enabled
+  - name: Set Lockout Time for Failed Password Attempts - Enable pam_faillock.so preauth editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so preauth
+      insertbefore: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Set Lockout Time for Failed Password Attempts - Enable pam_faillock.so authfail editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: auth        required      pam_faillock.so authfail
+      insertafter: ^auth.*sufficient.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
+  - name: Set Lockout Time for Failed Password Attempts - Enable pam_faillock.so account section editing PAM files
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      line: account     required      pam_faillock.so
+      insertbefore: ^account.*required.*pam_unix.so.*
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_is_enabled.found == 0
   when:
   - accounts_passwords_pam_faillock_unlock_time | bool
   - low_complexity | bool
@@ -2913,10 +2617,7 @@
   - no_reboot_needed | bool
   - restrict_strategy | bool
   - '"pam" in ansible_facts.packages'
-  - result_authselect_present is not skipped
-  - result_authselect_present.stat.exists
-  - result_authselect_check_cmd is success
-  - result_authselect_features.stdout is not search("with-faillock")
+  - not result_authselect_present.stat.exists
   tags:
   - CCE-80670-3
   - CJIS-5.5.3
@@ -2932,7 +2633,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Check the presence of /etc/security/faillock.conf file
+- name: Set Lockout Time for Failed Password Attempts - Check the presence of /etc/security/faillock.conf file
   ansible.builtin.stat:
     path: /etc/security/faillock.conf
   register: result_faillock_conf_check
@@ -2959,7 +2660,7 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure the pam_faillock.so unlock_time parameter in /etc/security/faillock.conf
+- name: Set Lockout Time for Failed Password Attempts - Ensure the pam_faillock.so unlock_time parameter in /etc/security/faillock.conf
   ansible.builtin.lineinfile:
     path: /etc/security/faillock.conf
     regexp: ^\s*unlock_time\s*=
@@ -2989,50 +2690,69 @@
   - no_reboot_needed
   - restrict_strategy
 
-- name: Ensure the pam_faillock.so preauth unlock_time parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)(unlock_time)=[0-5]+(.*)
-    line: \1required\3\4={{ var_accounts_passwords_pam_faillock_unlock_time }}\5
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
-  when:
-  - accounts_passwords_pam_faillock_unlock_time | bool
-  - low_complexity | bool
-  - low_disruption | bool
-  - medium_severity | bool
-  - no_reboot_needed | bool
-  - restrict_strategy | bool
-  - '"pam" in ansible_facts.packages'
-  - not result_faillock_conf_check.stat.exists
-  tags:
-  - CCE-80670-3
-  - CJIS-5.5.3
-  - DISA-STIG-RHEL-08-020016
-  - NIST-800-171-3.1.8
-  - NIST-800-53-AC-7(b)
-  - NIST-800-53-CM-6(a)
-  - PCI-DSS-Req-8.1.7
-  - accounts_passwords_pam_faillock_unlock_time
-  - low_complexity
-  - low_disruption
-  - medium_severity
-  - no_reboot_needed
-  - restrict_strategy
-
-- name: Ensure the pam_faillock.so authfail unlock_time parameter in auth section
-  ansible.builtin.lineinfile:
-    path: '{{ item }}'
-    backrefs: true
-    regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)(unlock_time)=[0-5]+(.*)
-    line: \1required\3\4={{ var_accounts_passwords_pam_faillock_unlock_time }}\5
-    state: present
-  loop:
-  - /etc/pam.d/system-auth
-  - /etc/pam.d/password-auth
+- name: Set Lockout Time for Failed Password Attempts - Ensure the pam_faillock.so unlock_time parameter in PAM files
+  block:
+  - name: Set Lockout Time for Failed Password Attempts - Check if pam_faillock.so unlock_time parameter is already enabled
+      in pam files
+    ansible.builtin.lineinfile:
+      path: /etc/pam.d/system-auth
+      regexp: .*auth.*pam_faillock.so (preauth|authfail).*unlock_time
+      state: absent
+    check_mode: true
+    changed_when: false
+    register: result_pam_faillock_unlock_time_parameter_is_present
+  - name: Set Lockout Time for Failed Password Attempts - Ensure the inclusion of pam_faillock.so preauth unlock_time parameter
+      in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)
+      line: \1required\3 unlock_time={{ var_accounts_passwords_pam_faillock_unlock_time }}
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_unlock_time_parameter_is_present.found == 0
+  - name: Set Lockout Time for Failed Password Attempts - Ensure the inclusion of pam_faillock.so authfail unlock_time parameter
+      in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)
+      line: \1required\3 unlock_time={{ var_accounts_passwords_pam_faillock_unlock_time }}
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_unlock_time_parameter_is_present.found == 0
+  - name: Set Lockout Time for Failed Password Attempts - Ensure the desired value for pam_faillock.so preauth unlock_time
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so preauth.*)(unlock_time)=[0-9]+(.*)
+      line: \1required\3\4={{ var_accounts_passwords_pam_faillock_unlock_time }}\5
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_unlock_time_parameter_is_present.found > 0
+  - name: Set Lockout Time for Failed Password Attempts - Ensure the desired value for pam_faillock.so authfail unlock_time
+      parameter in auth section
+    ansible.builtin.lineinfile:
+      path: '{{ item }}'
+      backrefs: true
+      regexp: (^\s*auth\s+)([\w\[].*\b)(\s+pam_faillock.so authfail.*)(unlock_time)=[0-9]+(.*)
+      line: \1required\3\4={{ var_accounts_passwords_pam_faillock_unlock_time }}\5
+      state: present
+    loop:
+    - /etc/pam.d/system-auth
+    - /etc/pam.d/password-auth
+    when:
+    - result_pam_faillock_unlock_time_parameter_is_present.found > 0
   when:
   - accounts_passwords_pam_faillock_unlock_time | bool
   - low_complexity | bool
@@ -7359,10 +7079,10 @@
   - medium_severity | bool
   - no_reboot_needed | bool
 
-- name: Ensure permission 0644 on /etc/group
+- name: Ensure permission u-xs,g-xws,o-xwt on /etc/group
   file:
     path: /etc/group
-    mode: '0644'
+    mode: u-xs,g-xws,o-xwt
   when:
   - configure_strategy | bool
   - file_permissions_etc_group | bool
@@ -7406,10 +7126,10 @@
   - medium_severity | bool
   - no_reboot_needed | bool
 
-- name: Ensure permission 0000 on /etc/gshadow
+- name: Ensure permission u-xwrs,g-xwrs,o-xwrt on /etc/gshadow
   file:
     path: /etc/gshadow
-    mode: '0000'
+    mode: u-xwrs,g-xwrs,o-xwrt
   when:
   - configure_strategy | bool
   - file_permissions_etc_gshadow | bool
@@ -7453,10 +7173,10 @@
   - medium_severity | bool
   - no_reboot_needed | bool
 
-- name: Ensure permission 0644 on /etc/passwd
+- name: Ensure permission u-xs,g-xws,o-xwt on /etc/passwd
   file:
     path: /etc/passwd
-    mode: '0644'
+    mode: u-xs,g-xws,o-xwt
   when:
   - configure_strategy | bool
   - file_permissions_etc_passwd | bool
@@ -7502,10 +7222,10 @@
   - medium_severity | bool
   - no_reboot_needed | bool
 
-- name: Ensure permission 0000 on /etc/shadow
+- name: Ensure permission u-xwrs,g-xwrs,o-xwrt on /etc/shadow
   file:
     path: /etc/shadow
-    mode: '0000'
+    mode: u-xwrs,g-xwrs,o-xwrt
   when:
   - configure_strategy | bool
   - file_permissions_etc_shadow | bool
@@ -7527,7 +7247,7 @@
   - medium_severity
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add noexec Option to /boot: Check information associated to mountpoint'
   command: findmnt --fstab '/boot'
   register: device_name
   failed_when: device_name.rc > 1
@@ -7549,7 +7269,7 @@
   - mount_option_boot_noexec
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add noexec Option to /boot: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -7574,7 +7294,7 @@
   - mount_option_boot_noexec
   - no_reboot_needed
 
-- name: If /boot not mounted, craft mount_info manually
+- name: 'Add noexec Option to /boot: If /boot not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -7605,7 +7325,7 @@
   - mount_option_boot_noexec
   - no_reboot_needed
 
-- name: Make sure noexec option is part of the to /boot options
+- name: 'Add noexec Option to /boot: Make sure noexec option is part of the to /boot options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',noexec'' }) }}'
   when:
@@ -7626,7 +7346,7 @@
   - mount_option_boot_noexec
   - no_reboot_needed
 
-- name: Ensure /boot is mounted with noexec option
+- name: 'Add noexec Option to /boot: Ensure /boot is mounted with noexec option'
   mount:
     path: /boot
     src: '{{ mount_info.source }}'
@@ -7651,7 +7371,7 @@
   - mount_option_boot_noexec
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /boot: Check information associated to mountpoint'
   command: findmnt --fstab '/boot'
   register: device_name
   failed_when: device_name.rc > 1
@@ -7680,7 +7400,7 @@
   - mount_option_boot_nosuid
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /boot: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -7712,7 +7432,7 @@
   - mount_option_boot_nosuid
   - no_reboot_needed
 
-- name: If /boot not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /boot: If /boot not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -7750,7 +7470,7 @@
   - mount_option_boot_nosuid
   - no_reboot_needed
 
-- name: Make sure nosuid option is part of the to /boot options
+- name: 'Add nosuid Option to /boot: Make sure nosuid option is part of the to /boot options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -7778,7 +7498,7 @@
   - mount_option_boot_nosuid
   - no_reboot_needed
 
-- name: Ensure /boot is mounted with nosuid option
+- name: 'Add nosuid Option to /boot: Ensure /boot is mounted with nosuid option'
   mount:
     path: /boot
     src: '{{ mount_info.source }}'
@@ -7810,7 +7530,7 @@
   - mount_option_boot_nosuid
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add noexec Option to /home: Check information associated to mountpoint'
   command: findmnt --fstab '/home'
   register: device_name
   failed_when: device_name.rc > 1
@@ -7834,7 +7554,7 @@
   - mount_option_home_noexec
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add noexec Option to /home: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -7861,7 +7581,7 @@
   - mount_option_home_noexec
   - no_reboot_needed
 
-- name: If /home not mounted, craft mount_info manually
+- name: 'Add noexec Option to /home: If /home not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -7894,7 +7614,7 @@
   - mount_option_home_noexec
   - no_reboot_needed
 
-- name: Make sure noexec option is part of the to /home options
+- name: 'Add noexec Option to /home: Make sure noexec option is part of the to /home options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',noexec'' }) }}'
   when:
@@ -7917,7 +7637,7 @@
   - mount_option_home_noexec
   - no_reboot_needed
 
-- name: Ensure /home is mounted with noexec option
+- name: 'Add noexec Option to /home: Ensure /home is mounted with noexec option'
   mount:
     path: /home
     src: '{{ mount_info.source }}'
@@ -7944,7 +7664,7 @@
   - mount_option_home_noexec
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /home: Check information associated to mountpoint'
   command: findmnt --fstab '/home'
   register: device_name
   failed_when: device_name.rc > 1
@@ -7973,7 +7693,7 @@
   - mount_option_home_nosuid
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /home: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8005,7 +7725,7 @@
   - mount_option_home_nosuid
   - no_reboot_needed
 
-- name: If /home not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /home: If /home not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8043,7 +7763,7 @@
   - mount_option_home_nosuid
   - no_reboot_needed
 
-- name: Make sure nosuid option is part of the to /home options
+- name: 'Add nosuid Option to /home: Make sure nosuid option is part of the to /home options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -8071,7 +7791,7 @@
   - mount_option_home_nosuid
   - no_reboot_needed
 
-- name: Ensure /home is mounted with nosuid option
+- name: 'Add nosuid Option to /home: Ensure /home is mounted with nosuid option'
   mount:
     path: /home
     src: '{{ mount_info.source }}'
@@ -8138,7 +7858,7 @@
   - mount_option_nodev_nonroot_local_partitions
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /opt: Check information associated to mountpoint'
   command: findmnt --fstab '/opt'
   register: device_name
   failed_when: device_name.rc > 1
@@ -8160,7 +7880,7 @@
   - mount_option_opt_nosuid
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /opt: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8185,7 +7905,7 @@
   - mount_option_opt_nosuid
   - no_reboot_needed
 
-- name: If /opt not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /opt: If /opt not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8216,7 +7936,7 @@
   - mount_option_opt_nosuid
   - no_reboot_needed
 
-- name: Make sure nosuid option is part of the to /opt options
+- name: 'Add nosuid Option to /opt: Make sure nosuid option is part of the to /opt options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -8237,7 +7957,7 @@
   - mount_option_opt_nosuid
   - no_reboot_needed
 
-- name: Ensure /opt is mounted with nosuid option
+- name: 'Add nosuid Option to /opt: Ensure /opt is mounted with nosuid option'
   mount:
     path: /opt
     src: '{{ mount_info.source }}'
@@ -8262,7 +7982,7 @@
   - mount_option_opt_nosuid
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /srv: Check information associated to mountpoint'
   command: findmnt --fstab '/srv'
   register: device_name
   failed_when: device_name.rc > 1
@@ -8284,7 +8004,7 @@
   - mount_option_srv_nosuid
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /srv: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8309,7 +8029,7 @@
   - mount_option_srv_nosuid
   - no_reboot_needed
 
-- name: If /srv not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /srv: If /srv not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8340,7 +8060,7 @@
   - mount_option_srv_nosuid
   - no_reboot_needed
 
-- name: Make sure nosuid option is part of the to /srv options
+- name: 'Add nosuid Option to /srv: Make sure nosuid option is part of the to /srv options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -8361,7 +8081,7 @@
   - mount_option_srv_nosuid
   - no_reboot_needed
 
-- name: Ensure /srv is mounted with nosuid option
+- name: 'Add nosuid Option to /srv: Ensure /srv is mounted with nosuid option'
   mount:
     path: /srv
     src: '{{ mount_info.source }}'
@@ -8386,7 +8106,7 @@
   - mount_option_srv_nosuid
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add noexec Option to /tmp: Check information associated to mountpoint'
   command: findmnt --fstab '/tmp'
   register: device_name
   failed_when: device_name.rc > 1
@@ -8415,7 +8135,7 @@
   - mount_option_tmp_noexec
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add noexec Option to /tmp: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8447,7 +8167,7 @@
   - mount_option_tmp_noexec
   - no_reboot_needed
 
-- name: If /tmp not mounted, craft mount_info manually
+- name: 'Add noexec Option to /tmp: If /tmp not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8485,7 +8205,7 @@
   - mount_option_tmp_noexec
   - no_reboot_needed
 
-- name: Make sure noexec option is part of the to /tmp options
+- name: 'Add noexec Option to /tmp: Make sure noexec option is part of the to /tmp options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',noexec'' }) }}'
   when:
@@ -8513,7 +8233,7 @@
   - mount_option_tmp_noexec
   - no_reboot_needed
 
-- name: Ensure /tmp is mounted with noexec option
+- name: 'Add noexec Option to /tmp: Ensure /tmp is mounted with noexec option'
   mount:
     path: /tmp
     src: '{{ mount_info.source }}'
@@ -8545,7 +8265,7 @@
   - mount_option_tmp_noexec
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /tmp: Check information associated to mountpoint'
   command: findmnt --fstab '/tmp'
   register: device_name
   failed_when: device_name.rc > 1
@@ -8574,7 +8294,7 @@
   - mount_option_tmp_nosuid
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /tmp: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8606,7 +8326,7 @@
   - mount_option_tmp_nosuid
   - no_reboot_needed
 
-- name: If /tmp not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /tmp: If /tmp not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8644,7 +8364,7 @@
   - mount_option_tmp_nosuid
   - no_reboot_needed
 
-- name: Make sure nosuid option is part of the to /tmp options
+- name: 'Add nosuid Option to /tmp: Make sure nosuid option is part of the to /tmp options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -8672,7 +8392,7 @@
   - mount_option_tmp_nosuid
   - no_reboot_needed
 
-- name: Ensure /tmp is mounted with nosuid option
+- name: 'Add nosuid Option to /tmp: Ensure /tmp is mounted with nosuid option'
   mount:
     path: /tmp
     src: '{{ mount_info.source }}'
@@ -8704,7 +8424,7 @@
   - mount_option_tmp_nosuid
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add noexec Option to /var/log: Check information associated to mountpoint'
   command: findmnt --fstab '/var/log'
   register: device_name
   failed_when: device_name.rc > 1
@@ -8733,7 +8453,7 @@
   - mount_option_var_log_noexec
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add noexec Option to /var/log: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8765,7 +8485,7 @@
   - mount_option_var_log_noexec
   - no_reboot_needed
 
-- name: If /var/log not mounted, craft mount_info manually
+- name: 'Add noexec Option to /var/log: If /var/log not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8803,7 +8523,7 @@
   - mount_option_var_log_noexec
   - no_reboot_needed
 
-- name: Make sure noexec option is part of the to /var/log options
+- name: 'Add noexec Option to /var/log: Make sure noexec option is part of the to /var/log options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',noexec'' }) }}'
   when:
@@ -8831,7 +8551,7 @@
   - mount_option_var_log_noexec
   - no_reboot_needed
 
-- name: Ensure /var/log is mounted with noexec option
+- name: 'Add noexec Option to /var/log: Ensure /var/log is mounted with noexec option'
   mount:
     path: /var/log
     src: '{{ mount_info.source }}'
@@ -8863,7 +8583,7 @@
   - mount_option_var_log_noexec
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /var/log: Check information associated to mountpoint'
   command: findmnt --fstab '/var/log'
   register: device_name
   failed_when: device_name.rc > 1
@@ -8892,7 +8612,7 @@
   - mount_option_var_log_nosuid
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /var/log: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8924,7 +8644,7 @@
   - mount_option_var_log_nosuid
   - no_reboot_needed
 
-- name: If /var/log not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /var/log: If /var/log not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -8962,7 +8682,7 @@
   - mount_option_var_log_nosuid
   - no_reboot_needed
 
-- name: Make sure nosuid option is part of the to /var/log options
+- name: 'Add nosuid Option to /var/log: Make sure nosuid option is part of the to /var/log options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -8990,7 +8710,7 @@
   - mount_option_var_log_nosuid
   - no_reboot_needed
 
-- name: Ensure /var/log is mounted with nosuid option
+- name: 'Add nosuid Option to /var/log: Ensure /var/log is mounted with nosuid option'
   mount:
     path: /var/log
     src: '{{ mount_info.source }}'
@@ -9022,7 +8742,7 @@
   - mount_option_var_log_nosuid
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add noexec Option to /var: Check information associated to mountpoint'
   command: findmnt --fstab '/var'
   register: device_name
   failed_when: device_name.rc > 1
@@ -9044,7 +8764,7 @@
   - mount_option_var_noexec
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add noexec Option to /var: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9069,7 +8789,7 @@
   - mount_option_var_noexec
   - no_reboot_needed
 
-- name: If /var not mounted, craft mount_info manually
+- name: 'Add noexec Option to /var: If /var not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9100,7 +8820,7 @@
   - mount_option_var_noexec
   - no_reboot_needed
 
-- name: Make sure noexec option is part of the to /var options
+- name: 'Add noexec Option to /var: Make sure noexec option is part of the to /var options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',noexec'' }) }}'
   when:
@@ -9121,7 +8841,7 @@
   - mount_option_var_noexec
   - no_reboot_needed
 
-- name: Ensure /var is mounted with noexec option
+- name: 'Add noexec Option to /var: Ensure /var is mounted with noexec option'
   mount:
     path: /var
     src: '{{ mount_info.source }}'
@@ -9146,7 +8866,7 @@
   - mount_option_var_noexec
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /var: Check information associated to mountpoint'
   command: findmnt --fstab '/var'
   register: device_name
   failed_when: device_name.rc > 1
@@ -9168,7 +8888,7 @@
   - no_reboot_needed
   - unknown_severity
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /var: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9193,7 +8913,7 @@
   - no_reboot_needed
   - unknown_severity
 
-- name: If /var not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /var: If /var not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9224,7 +8944,7 @@
   - no_reboot_needed
   - unknown_severity
 
-- name: Make sure nosuid option is part of the to /var options
+- name: 'Add nosuid Option to /var: Make sure nosuid option is part of the to /var options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -9245,7 +8965,7 @@
   - no_reboot_needed
   - unknown_severity
 
-- name: Ensure /var is mounted with nosuid option
+- name: 'Add nosuid Option to /var: Ensure /var is mounted with nosuid option'
   mount:
     path: /var
     src: '{{ mount_info.source }}'
@@ -9270,7 +8990,7 @@
   - no_reboot_needed
   - unknown_severity
 
-- name: Check information associated to mountpoint
+- name: 'Add noexec Option to /var/tmp: Check information associated to mountpoint'
   command: findmnt --fstab '/var/tmp'
   register: device_name
   failed_when: device_name.rc > 1
@@ -9293,7 +9013,7 @@
   - mount_option_var_tmp_noexec
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add noexec Option to /var/tmp: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9319,7 +9039,7 @@
   - mount_option_var_tmp_noexec
   - no_reboot_needed
 
-- name: If /var/tmp not mounted, craft mount_info manually
+- name: 'Add noexec Option to /var/tmp: If /var/tmp not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9351,7 +9071,7 @@
   - mount_option_var_tmp_noexec
   - no_reboot_needed
 
-- name: Make sure noexec option is part of the to /var/tmp options
+- name: 'Add noexec Option to /var/tmp: Make sure noexec option is part of the to /var/tmp options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',noexec'' }) }}'
   when:
@@ -9373,7 +9093,7 @@
   - mount_option_var_tmp_noexec
   - no_reboot_needed
 
-- name: Ensure /var/tmp is mounted with noexec option
+- name: 'Add noexec Option to /var/tmp: Ensure /var/tmp is mounted with noexec option'
   mount:
     path: /var/tmp
     src: '{{ mount_info.source }}'
@@ -9399,7 +9119,7 @@
   - mount_option_var_tmp_noexec
   - no_reboot_needed
 
-- name: Check information associated to mountpoint
+- name: 'Add nosuid Option to /var/tmp: Check information associated to mountpoint'
   command: findmnt --fstab '/var/tmp'
   register: device_name
   failed_when: device_name.rc > 1
@@ -9422,7 +9142,7 @@
   - mount_option_var_tmp_nosuid
   - no_reboot_needed
 
-- name: Create mount_info dictionary variable
+- name: 'Add nosuid Option to /var/tmp: Create mount_info dictionary variable'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9448,7 +9168,7 @@
   - mount_option_var_tmp_nosuid
   - no_reboot_needed
 
-- name: If /var/tmp not mounted, craft mount_info manually
+- name: 'Add nosuid Option to /var/tmp: If /var/tmp not mounted, craft mount_info manually'
   set_fact:
     mount_info: '{{ mount_info|default({})|combine({item.0: item.1}) }}'
   with_together:
@@ -9480,7 +9200,7 @@
   - mount_option_var_tmp_nosuid
   - no_reboot_needed
 
-- name: Make sure nosuid option is part of the to /var/tmp options
+- name: 'Add nosuid Option to /var/tmp: Make sure nosuid option is part of the to /var/tmp options'
   set_fact:
     mount_info: '{{ mount_info | combine( {''options'':''''~mount_info.options~'',nosuid'' }) }}'
   when:
@@ -9502,7 +9222,7 @@
   - mount_option_var_tmp_nosuid
   - no_reboot_needed
 
-- name: Ensure /var/tmp is mounted with nosuid option
+- name: 'Add nosuid Option to /var/tmp: Ensure /var/tmp is mounted with nosuid option'
   mount:
     path: /var/tmp
     src: '{{ mount_info.source }}'
@@ -9537,8 +9257,8 @@
   when:
   - disable_strategy | bool
   - low_complexity | bool
+  - low_severity | bool
   - medium_disruption | bool
-  - medium_severity | bool
   - reboot_required | bool
   - sysctl_kernel_dmesg_restrict | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
@@ -9550,8 +9270,8 @@
   - NIST-800-53-SI-11(b)
   - disable_strategy
   - low_complexity
+  - low_severity
   - medium_disruption
-  - medium_severity
   - reboot_required
   - sysctl_kernel_dmesg_restrict
 
@@ -9564,8 +9284,8 @@
   when:
   - disable_strategy | bool
   - low_complexity | bool
+  - low_severity | bool
   - medium_disruption | bool
-  - medium_severity | bool
   - reboot_required | bool
   - sysctl_kernel_dmesg_restrict | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
@@ -9577,8 +9297,8 @@
   - NIST-800-53-SI-11(b)
   - disable_strategy
   - low_complexity
+  - low_severity
   - medium_disruption
-  - medium_severity
   - reboot_required
   - sysctl_kernel_dmesg_restrict
 
@@ -9591,8 +9311,8 @@
   when:
   - disable_strategy | bool
   - low_complexity | bool
+  - low_severity | bool
   - medium_disruption | bool
-  - medium_severity | bool
   - reboot_required | bool
   - sysctl_kernel_dmesg_restrict | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
@@ -9604,8 +9324,8 @@
   - NIST-800-53-SI-11(b)
   - disable_strategy
   - low_complexity
+  - low_severity
   - medium_disruption
-  - medium_severity
   - reboot_required
   - sysctl_kernel_dmesg_restrict
 
@@ -9756,8 +9476,8 @@
   when:
   - disable_strategy | bool
   - low_complexity | bool
+  - low_severity | bool
   - medium_disruption | bool
-  - medium_severity | bool
   - reboot_required | bool
   - sysctl_kernel_perf_event_paranoid | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
@@ -9767,8 +9487,8 @@
   - NIST-800-53-AC-6
   - disable_strategy
   - low_complexity
+  - low_severity
   - medium_disruption
-  - medium_severity
   - reboot_required
   - sysctl_kernel_perf_event_paranoid
 
@@ -9781,8 +9501,8 @@
   when:
   - disable_strategy | bool
   - low_complexity | bool
+  - low_severity | bool
   - medium_disruption | bool
-  - medium_severity | bool
   - reboot_required | bool
   - sysctl_kernel_perf_event_paranoid | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
@@ -9792,8 +9512,8 @@
   - NIST-800-53-AC-6
   - disable_strategy
   - low_complexity
+  - low_severity
   - medium_disruption
-  - medium_severity
   - reboot_required
   - sysctl_kernel_perf_event_paranoid
 
@@ -9806,8 +9526,8 @@
   when:
   - disable_strategy | bool
   - low_complexity | bool
+  - low_severity | bool
   - medium_disruption | bool
-  - medium_severity | bool
   - reboot_required | bool
   - sysctl_kernel_perf_event_paranoid | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
@@ -9817,8 +9537,8 @@
   - NIST-800-53-AC-6
   - disable_strategy
   - low_complexity
+  - low_severity
   - medium_disruption
-  - medium_severity
   - reboot_required
   - sysctl_kernel_perf_event_paranoid
 
@@ -10160,10 +9880,10 @@
   - reboot_required
   - sysctl_kernel_kptr_restrict
 
-- name: Ensure sysctl kernel.kptr_restrict is set to 1
+- name: Ensure sysctl kernel.kptr_restrict is set
   sysctl:
     name: kernel.kptr_restrict
-    value: '1'
+    value: '{{ sysctl_kernel_kptr_restrict_value }}'
     state: present
     reload: true
   when:
@@ -10423,7 +10143,7 @@
   - configure_strategy | bool
   - low_complexity | bool
   - low_disruption | bool
-  - low_severity | bool
+  - medium_severity | bool
   - no_reboot_needed | bool
   - postfix_client_configure_mail_alias | bool
   - ansible_virtualization_type not in ["docker", "lxc", "openvz", "podman", "container"]
@@ -10434,7 +10154,7 @@
   - configure_strategy
   - low_complexity
   - low_disruption
-  - low_severity
+  - medium_severity
   - no_reboot_needed
   - postfix_client_configure_mail_alias
 
@@ -10830,11 +10550,11 @@
   - package_tftp_removed | bool
 
 - name: Find /etc/ssh/ file(s)
-  find:
-    paths: /etc/ssh/
-    patterns: ^.*_key$
-    use_regex: true
+  command: find -H /etc/ssh/ -maxdepth 1 -perm /u+xs,g+xwrs,o+xwrt -type f -regex "^.*_key$"
   register: files_found
+  changed_when: false
+  failed_when: false
+  check_mode: false
   when:
   - configure_strategy | bool
   - file_permissions_sshd_private_key | bool
@@ -10860,10 +10580,11 @@
 
 - name: Set permissions for /etc/ssh/ file(s)
   file:
-    path: '{{ item.path }}'
-    mode: '0600'
+    path: '{{ item }}'
+    mode: u-xs,g-xwrs,o-xwrt
+    state: file
   with_items:
-  - '{{ files_found.files }}'
+  - '{{ files_found.stdout_lines }}'
   when:
   - configure_strategy | bool
   - file_permissions_sshd_private_key | bool
