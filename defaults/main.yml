@@ -43,6 +43,7 @@ sysctl_net_ipv4_conf_default_secure_redirects_value: '0'
 sysctl_net_ipv4_icmp_ignore_bogus_error_responses_value: '1'
 sysctl_net_ipv4_tcp_rfc1337_value: '1'
 sysctl_net_ipv4_tcp_syncookies_value: '1'
+sysctl_kernel_kptr_restrict_value: '1'
 var_selinux_state: enforcing
 var_polyinstantiation_enabled: 'true'
 var_postfix_root_mail_alias: system.administrator@mail.mil
