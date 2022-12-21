@@ -195,6 +195,7 @@ reboot_required: true
 restrict_strategy: true
 rsyslog_files_permissions: true
 rsyslog_remote_loghost: true
+rsyslog_remote_tls: true
 sebool_polyinstantiation_enabled: true
 security_patches_up_to_date: true
 selinux_state: true
