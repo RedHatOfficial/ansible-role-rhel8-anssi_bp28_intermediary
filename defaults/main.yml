@@ -197,6 +197,8 @@ postfix_client_configure_mail_alias: true
 postfix_network_listening_disabled: true
 reboot_required: true
 restrict_strategy: true
+rsyslog_files_groupownership: true
+rsyslog_files_ownership: true
 rsyslog_files_permissions: true
 rsyslog_remote_loghost: true
 rsyslog_remote_tls: true
