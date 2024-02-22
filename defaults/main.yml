@@ -53,7 +53,7 @@ sysctl_kernel_kptr_restrict_value: '2'
 var_slub_debug_options: FZP
 var_selinux_state: enforcing
 var_polyinstantiation_enabled: 'true'
-var_postfix_root_mail_alias: system.administrator@mail.mil
+var_postfix_root_mail_alias: change_me@localhost
 var_postfix_inet_interfaces: loopback-only
 var_sshd_set_keepalive: '0'
 sshd_idle_timeout_value: '600'
