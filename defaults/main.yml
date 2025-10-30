@@ -108,7 +108,6 @@ DISA_STIG_RHEL_08_030550: true
 DISA_STIG_RHEL_08_040000: true
 DISA_STIG_RHEL_08_040002: true
 DISA_STIG_RHEL_08_040004: true
-DISA_STIG_RHEL_08_040010: true
 DISA_STIG_RHEL_08_040124: true
 DISA_STIG_RHEL_08_040125: true
 DISA_STIG_RHEL_08_040127: true
@@ -160,6 +159,8 @@ audit_rules_privileged_commands_sudo: true
 configure_strategy: true
 dir_perms_world_writable_root_owned: true
 dir_perms_world_writable_sticky_bits: true
+dir_system_commands_group_root_owned: true
+dir_system_commands_root_owned: true
 directory_groupowner_etc_ipsecd: true
 directory_groupowner_etc_iptables: true
 directory_groupowner_etc_nftables: true
@@ -271,13 +272,9 @@ package_aide_installed: true
 package_audit_installed: true
 package_dhcp_removed: true
 package_dnf_automatic_installed: true
-package_rsh_removed: true
-package_rsh_server_removed: true
 package_sendmail_removed: true
 package_sssd_installed: true
 package_sudo_installed: true
-package_talk_removed: true
-package_talk_server_removed: true
 package_telnet_removed: true
 package_telnet_server_removed: true
 package_tftp_removed: true
